@@ -49,5 +49,11 @@ function createApp() {
   return app;
 }
 
-module.exports = { createApp };
+// Vercel expects the module export to be a request handler.
+// An Express app is a (req, res) handler function.
+const app = createApp();
+
+module.exports = app;
+module.exports.createApp = createApp;
+module.exports.default = app;
 
