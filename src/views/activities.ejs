@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recent Runs</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; line-height: 1.4; }
+      header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+      h1 { margin: 0; font-size: 20px; }
+      a { color: inherit; }
+      .muted { opacity: 0.7; font-size: 14px; }
+      ul { padding-left: 18px; }
+      li { margin: 10px 0; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .pill { display: inline-block; padding: 2px 8px; border: 1px solid rgba(127,127,127,.35); border-radius: 999px; font-size: 12px; margin-left: 8px; opacity: 0.9; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Recent running activities</h1>
+      <div class="muted">
+        JSON: <a href="/api/activities">/api/activities</a>
+      </div>
+    </header>
+
+    <% if (!isAuthed) { %>
+      <p>
+        <a href="/auth/strava">Log in with Strava</a>
+      </p>
+      <p class="muted">
+        Once authenticated, this page will show your recent runs.
+      </p>
+    <% } else if (!activities || activities.length === 0) { %>
+      <p>No activities found.</p>
+    <% } else { %>
+      <ul>
+        <% activities.filter(a => a.type === "Run").forEach(a => { %>
+          <li>
+            <strong><%= a.name %></strong>
+            <span class="pill"><%= a.type %></span>
+            <div class="muted">
+              <span><%= new Date(a.start_date_local).toLocaleString() %></span>
+              <span> · </span>
+              <span><%= (a.distance / 1000).toFixed(2) %> km</span>
+              <span> · </span>
+              <span><%= Math.round(a.moving_time / 60) %> min</span>
+            </div>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+
+    <p class="muted">
+      OAuth tokens are stored in a session cookie for this starter.
+    </p>
+  </body>
+</html>
+
