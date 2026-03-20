@@ -3,7 +3,8 @@ const { getRecentActivities } = require("../services/stravaClient");
 const {
   buildAuthorizeUrl,
   exchangeCodeForToken,
-  refreshAccessToken
+  refreshAccessToken,
+  persistRefreshToken
 } = require("../services/stravaOAuth");
 
 const router = express.Router();
@@ -17,18 +18,13 @@ function setSessionToken(req, tokenResponse) {
   };
 }
 
-async function getAccessTokenFromSession(req) {
-  const s = req.session?.strava;
-  if (!s?.access_token) return null;
+async function getAccessToken() {
+  const refreshToken = process.env.STRAVA_REFRESH_TOKEN;
+  if (!refreshToken) return null;
 
-  const now = Math.floor(Date.now() / 1000);
-  if (!s.expires_at || s.expires_at > now + 30) return s.access_token;
-
-  if (!s.refresh_token) return s.access_token;
-
-  const refreshed = await refreshAccessToken(s.refresh_token);
-  setSessionToken(req, refreshed);
-  return refreshed.access_token;
+  const tokenResponse = await refreshAccessToken(refreshToken);
+  await persistRefreshToken(tokenResponse.refresh_token);
+  return tokenResponse.access_token;
 }
 
 router.get("/", (req, res) => {
@@ -64,6 +60,7 @@ router.get("/auth/strava/callback", async (req, res, next) => {
     }
 
     const tokenResponse = await exchangeCodeForToken(String(code));
+    await persistRefreshToken(tokenResponse.refresh_token);
     setSessionToken(req, tokenResponse);
     delete req.session.oauthState;
 
@@ -86,7 +83,7 @@ router.get("/health", (req, res) => {
 router.get("/api/activities", async (req, res, next) => {
   try {
     const perPage = Math.min(Number(req.query.per_page || 10), 50);
-    const accessToken = (await getAccessTokenFromSession(req)) || undefined;
+    const accessToken = await getAccessToken();
     const activities = await getRecentActivities({ perPage, accessToken });
 
     res.json({
@@ -100,7 +97,7 @@ router.get("/api/activities", async (req, res, next) => {
 
 router.get("/activities", async (req, res, next) => {
   try {
-    const accessToken = (await getAccessTokenFromSession(req)) || undefined;
+    const accessToken = await getAccessToken();
     const isAuthed = Boolean(accessToken);
     const activities = isAuthed
       ? await getRecentActivities({ perPage: 10, accessToken })
@@ -113,4 +110,3 @@ router.get("/activities", async (req, res, next) => {
 });
 
 module.exports = router;
-

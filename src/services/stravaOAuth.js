@@ -87,9 +87,36 @@ async function refreshAccessToken(refreshToken) {
   return await res.json();
 }
 
+async function persistRefreshToken(newRefreshToken) {
+  const token = process.env.VERCEL_TOKEN;
+  const projectId = process.env.VERCEL_PROJECT_ID;
+
+  if (!token || !projectId) return;
+
+  const listRes = await fetch(
+    `https://api.vercel.com/v9/projects/${projectId}/env`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const { envs } = await listRes.json();
+  const envVar = envs.find((e) => e.key === "STRAVA_REFRESH_TOKEN");
+  if (!envVar) return;
+
+  await fetch(
+    `https://api.vercel.com/v9/projects/${projectId}/env/${envVar.id}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ value: newRefreshToken })
+    }
+  );
+}
+
 module.exports = {
   buildAuthorizeUrl,
   exchangeCodeForToken,
-  refreshAccessToken
+  refreshAccessToken,
+  persistRefreshToken
 };
-
