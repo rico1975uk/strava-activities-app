@@ -74,6 +74,8 @@ async function getActivityLaps(activityId, { accessToken } = {}) {
   const rawLaps = await stravaFetchJson(`/activities/${activityId}/laps`, {
     accessToken
   });
+  if (rawLaps.length > 0) console.log(JSON.stringify(rawLaps[0], null, 2));
+return rawLaps.map(mapLap);
   return rawLaps.map(mapLap);
 }
 
