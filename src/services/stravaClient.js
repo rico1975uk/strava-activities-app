@@ -41,24 +41,18 @@ function formatPace(averageSpeedMs) {
   return `${minutes}:${seconds}/km`;
 }
 
-function mapLap(lap) {
-  const elevationHigh =
-    lap.elevation_high ?? lap.elev_high ?? lap.elevHigh ?? null;
-  const elevationLow =
-    lap.elevation_low ?? lap.elev_low ?? lap.elevLow ?? null;
+function calculateDescent(altitudeStream, startIndex, endIndex) {
+  if (!altitudeStream || altitudeStream.length === 0) return null;
+  const slice = altitudeStream.slice(startIndex, endIndex + 1);
+  let descent = 0;
+  for (let i = 1; i < slice.length; i++) {
+    const diff = slice[i] - slice[i - 1];
+    if (diff < 0) descent += diff;
+  }
+  return Math.round(Math.abs(descent) * 10) / 10;
+}
 
-  const hasBothElevations =
-    elevationHigh !== null &&
-    elevationHigh !== undefined &&
-    elevationLow !== null &&
-    elevationLow !== undefined &&
-    !Number.isNaN(Number(elevationHigh)) &&
-    !Number.isNaN(Number(elevationLow));
-
-  const elevationLossM = hasBothElevations
-    ? Math.round((Number(elevationHigh) - Number(elevationLow)) * 10) / 10
-    : null;
-
+function mapLap(lap, altitudeStream) {
   return {
     lap_number: lap.lap_index,
     distance_m: lap.distance,
@@ -66,20 +60,22 @@ function mapLap(lap) {
     average_heart_rate_bpm: lap.average_heartrate ?? null,
     average_pace: formatPace(lap.average_speed),
     elevation_gain_m: lap.total_elevation_gain,
-    elevation_loss_m: elevationLossM
+    elevation_loss_m: calculateDescent(altitudeStream, lap.start_index, lap.end_index)
   };
 }
 
 async function getActivityLaps(activityId, { accessToken } = {}) {
-  const rawLaps = await stravaFetchJson(`/activities/${activityId}/laps`, {
-    accessToken
-  });
-  if (rawLaps.length > 0) console.log(JSON.stringify(rawLaps[0], null, 2));
-return rawLaps.map(mapLap);
-  return rawLaps.map(mapLap);
+  const [rawLaps, streamData] = await Promise.all([
+    stravaFetchJson(`/activities/${activityId}/laps`, { accessToken }),
+    stravaFetchJson(`/activities/${activityId}/streams?keys=altitude`, { accessToken })
+  ]);
+
+  const altitudeStream = streamData?.find(s => s.type === "altitude")?.data ?? null;
+
+  return rawLaps.map(lap => mapLap(lap, altitudeStream));
 }
 
-async function getRecentActivities({ perPage = 10, accessToken } = {}) {
+async function getRecentActivities({ perPage = 5, accessToken } = {}) {
   const query = new URLSearchParams({ per_page: String(perPage) });
   const activities = await stravaFetchJson(
     `/athlete/activities?${query.toString()}`,
