@@ -42,13 +42,31 @@ function formatPace(averageSpeedMs) {
 }
 
 function mapLap(lap) {
+  const elevationHigh =
+    lap.elevation_high ?? lap.elev_high ?? lap.elevHigh ?? null;
+  const elevationLow =
+    lap.elevation_low ?? lap.elev_low ?? lap.elevLow ?? null;
+
+  const hasBothElevations =
+    elevationHigh !== null &&
+    elevationHigh !== undefined &&
+    elevationLow !== null &&
+    elevationLow !== undefined &&
+    !Number.isNaN(Number(elevationHigh)) &&
+    !Number.isNaN(Number(elevationLow));
+
+  const elevationLossM = hasBothElevations
+    ? Math.round((Number(elevationHigh) - Number(elevationLow)) * 10) / 10
+    : null;
+
   return {
     lap_number: lap.lap_index,
     distance_m: lap.distance,
     moving_time_s: lap.moving_time,
     average_heart_rate_bpm: lap.average_heartrate ?? null,
     average_pace: formatPace(lap.average_speed),
-    elevation_gain_m: lap.total_elevation_gain
+    elevation_gain_m: lap.total_elevation_gain,
+    elevation_loss_m: elevationLossM
   };
 }
 
