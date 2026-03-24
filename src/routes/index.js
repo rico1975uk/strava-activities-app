@@ -86,6 +86,7 @@ router.get("/api/activities", async (req, res, next) => {
     const accessToken = await getAccessToken();
     const activities = await getRecentActivities({ perPage, accessToken });
 
+    res.set('Cache-Control', 'no-store');
     res.json({
       count: activities.length,
       activities
