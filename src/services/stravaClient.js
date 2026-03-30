@@ -52,7 +52,51 @@ function calculateDescent(altitudeStream, startIndex, endIndex) {
   return Math.round(Math.abs(descent) * 10) / 10;
 }
 
-function mapLap(lap, altitudeStream) {
+function findFirstIndexAtOrAfter(timeStream, second) {
+  for (let i = 0; i < timeStream.length; i++) {
+    if (timeStream[i] >= second) return i;
+  }
+  return timeStream.length - 1;
+}
+
+function findLastIndexAtOrBefore(timeStream, second) {
+  for (let i = timeStream.length - 1; i >= 0; i--) {
+    if (timeStream[i] <= second) return i;
+  }
+  return 0;
+}
+
+function calculateLapDescentFromStreams(laps, altitudeStream, timeStream) {
+  if (!Array.isArray(laps) || !laps.length) return [];
+  if (!Array.isArray(altitudeStream) || !Array.isArray(timeStream)) {
+    return laps.map(() => null);
+  }
+  if (!altitudeStream.length || !timeStream.length) {
+    return laps.map(() => null);
+  }
+
+  // Strava lap objects do not reliably include start/end stream indices.
+  // Reconstruct each lap's time window from cumulative elapsed_time.
+  let lapStartSecond = 0;
+  return laps.map((lap) => {
+    const lapElapsed = Math.max(Number(lap.elapsed_time || lap.moving_time || 0), 0);
+    const lapEndSecond = lapStartSecond + lapElapsed;
+
+    let startIndex = findFirstIndexAtOrAfter(timeStream, lapStartSecond);
+    let endIndex = findLastIndexAtOrBefore(timeStream, lapEndSecond);
+
+    // Keep a valid window even when stream sampling and lap boundaries are sparse.
+    if (endIndex < startIndex) endIndex = startIndex;
+    startIndex = Math.max(0, Math.min(startIndex, altitudeStream.length - 1));
+    endIndex = Math.max(0, Math.min(endIndex, altitudeStream.length - 1));
+
+    const descent = calculateDescent(altitudeStream, startIndex, endIndex);
+    lapStartSecond = lapEndSecond;
+    return descent;
+  });
+}
+
+function mapLap(lap, elevationLossM) {
   return {
     lap_number: lap.lap_index,
     distance_m: lap.distance,
@@ -60,19 +104,21 @@ function mapLap(lap, altitudeStream) {
     average_heart_rate_bpm: lap.average_heartrate ?? null,
     average_pace: formatPace(lap.average_speed),
     elevation_gain_m: lap.total_elevation_gain,
-    elevation_loss_m: calculateDescent(altitudeStream, lap.start_index, lap.end_index)
+    elevation_loss_m: elevationLossM
   };
 }
 
 async function getActivityLaps(activityId, { accessToken } = {}) {
   const [rawLaps, streamData] = await Promise.all([
     stravaFetchJson(`/activities/${activityId}/laps`, { accessToken }),
-    stravaFetchJson(`/activities/${activityId}/streams?keys=altitude`, { accessToken })
+    stravaFetchJson(`/activities/${activityId}/streams?keys=altitude,time`, { accessToken })
   ]);
 
   const altitudeStream = streamData?.find(s => s.type === "altitude")?.data ?? null;
+  const timeStream = streamData?.find(s => s.type === "time")?.data ?? null;
+  const lapDescent = calculateLapDescentFromStreams(rawLaps, altitudeStream, timeStream);
 
-  return rawLaps.map(lap => mapLap(lap, altitudeStream));
+  return rawLaps.map((lap, i) => mapLap(lap, lapDescent[i]));
 }
 
 async function getRecentActivities({ perPage = 5, accessToken } = {}) {
